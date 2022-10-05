@@ -1,0 +1,211 @@
+---
+title: "Chapter 3"
+output:
+  pdf_document:
+    number_sections: true
+    toc: true
+    extra_dependencies: ["amsthm", "amsmath"]
+  html_notebook: default
+---
+
+
+```{r}
+library(sf)
+library(terra)
+library(dplyr)
+library(spData)
+data(us_states)
+data(us_states_df)
+```
+
+E1. Create a new object called `us_states_name` that contains only the `NAME` column from the `us_states` object using either base R (`[`) or tidyverse (`select()`) syntax.
+What is the class of the new object and what makes it geographic?
+
+```{r}
+us_states_name <- us_states[, "NAME"]
+class(us_states_name)
+```
+
+E2. Select columns from the `us_states` object which contain population data.
+Obtain the same result using a different command (bonus: try to find three ways of obtaining the same result).
+Hint: try to use helper functions, such as `contains` or `matches` from **dplyr** (see `?contains`).
+
+```{r}
+# E2
+us_states_pop1 <- us_states[, c("total_pop_10", "total_pop_15")]
+
+us_states_pop1
+```
+
+```{r}
+us_states |> dplyr::select(total_pop_10, total_pop_15)
+```
+
+E3. Find all states with the following characteristics (bonus find *and* plot them):
+
+- Belong to the Midwest region.
+
+```{r}
+# E3
+us_states_midwest <- us_states[us_states$REGION=="Midwest",]
+plot(st_geometry(us_states_midwest))
+```
+
+```{r}
+#E3
+plot(st_geometry(us_states |> 
+  filter(REGION == "Midwest")))
+```
+
+- Belong to the West region, have an area below 250,000 km^2^ *and* in 2015 a population greater than 5,000,000 residents (hint: you may need to use the function `units::set_units()` or `as.numeric()`).
+
+```{r}
+# E3
+us_states_west <- us_states[us_states$REGION=="West",]
+us_states_west <- us_states_west[us_states_west$AREA < units::set_units(250000, "km^2"), ]
+us_states_west <- us_states_west[us_states_west$total_pop_15 > 5000000, ]
+us_states_west
+plot(st_geometry(us_states_west))
+```
+
+- Belong to the South region, had an area larger than 150,000 km^2^ or a total population in 2015 larger than 7,000,000 residents.
+
+```{r}
+us_states_south <- us_states |> filter(REGION=="South", AREA > units::set_units(150000, "km^2") | total_pop_15 > 7000000)
+plot(st_geometry(us_states_south))
+```
+
+E4. What was the total population in 2015 in the `us_states` dataset?
+What was the minimum and maximum total population in 2015?
+
+```{r}
+#E4
+us_states |> summarize(total_pop = sum(total_pop_15),
+                       min_pop = min(total_pop_15),
+                       max_pop = max(total_pop_15))
+```
+
+E5. How many states are there in each region?
+
+```{r}
+#E5
+# n() gives the group size 
+us_states |> 
+  group_by(REGION) |>
+  summarise(nr_of_states = n())
+```
+
+E6. What was the minimum and maximum total population in 2015 in each region?
+What was the total population in 2015 in each region?
+
+```{r}
+#E6
+summarize(group_by(us_states, REGION), 
+          min_pop=min(total_pop_15),
+          max_pop=max(total_pop_15),
+          tot_pop=sum(total_pop_15))
+```
+
+E7. Add variables from `us_states_df` to `us_states`, and create a new object called `us_states_stats`.
+What function did you use and why?
+Which variable is the key in both datasets?
+What is the class of the new object?
+
+```{r}
+#E7
+us_states_stats <- us_states |>
+  left_join(us_states_df, by = c("NAME"="state"))
+class(us_states_stats)
+```
+
+E8. `us_states_df` has two more rows than `us_states`.
+How can you find them? (hint: try to use the `dplyr::anti_join()` function)
+
+```{r}
+#E8
+dplyr::anti_join(us_states_df, st_drop_geometry(us_states),
+                 by = c("state" = "NAME"))
+```
+
+E9. What was the population density in 2015 in each state?
+What was the population density in 2010 in each state?
+
+```{r}
+#E9
+us_pop_density_15 <- us_states$total_pop_15 / us_states$AREA
+us_pop_density_15
+```
+
+or
+
+```{r}
+#E9
+us_states2 <- us_states |>
+  mutate(pop_dens_15 = total_pop_15/AREA,
+         pop_dens_10 = total_pop_10/AREA)
+
+us_states2$pop_dens_15
+```
+
+E10. How much has population density changed between 2010 and 2015 in each state?
+Calculate the change in percentages and map them.
+
+```{r}
+#E10
+us_states2$pop_dens_change <- 
+  us_states2$pop_dens_15 / us_states2$pop_dens_10
+
+plot(us_states2[, "pop_dens_change"] )
+```
+
+E11. Change the columns' names in `us_states` to lowercase. (Hint: helper functions - `tolower()` and `colnames()` may help.)
+
+```{r}
+us_states |> 
+  setNames(tolower(colnames(us_states)))
+```
+
+or
+
+```{r 03-ex-e11}
+us_states %>%
+  setNames(tolower(colnames(.)))
+?setNames
+```
+
+E12. Using `us_states` and `us_states_df` create a new object called `us_states_sel`.
+The new object should have only two variables - `median_income_15` and `geometry`.
+Change the name of the `median_income_15` column to `Income`.
+
+```{r}
+us_states_df
+```
+
+
+```{r}
+us_states_sel <- left_join(us_states, us_states_df, by = c("NAME" = "state"))
+us_states_sel <- dplyr::select(us_states_sel, Income=median_income_15)
+us_states_sel
+```
+
+or
+
+```{r}
+us_states_sel <- us_states |>
+  left_join(us_states_df, by = c("NAME" = "state")) |>
+  dplyr::select(Income = median_income_15)
+```
+
+E13. Calculate the change in the number of residents living below the poverty level between 2010 and 2015 for each state. (Hint: See ?us_states_df for documentation on the poverty level columns.)
+Bonus: Calculate the change in the *percentage* of residents living below the poverty level in each state.
+
+```{r}
+
+```
+
+
+
+
+
+
+
